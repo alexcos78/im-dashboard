@@ -1,17 +1,14 @@
 tosca_definitions_version: tosca_simple_yaml_1_0
 
 imports:
-  - ec3_custom_types: https://raw.githubusercontent.com/grycap/ec3/tosca/tosca/custom_types.yaml
+  #- ec3_custom_types: https://raw.githubusercontent.com/grycap/ec3/tosca/tosca/custom_types.yaml
+  - ec3_custom_types: https://raw.githubusercontent.com/alexcos78/ec3/tosca/tosca/custom_types.yaml
 
 metadata:
   display_name: Launch an OSCAR Virtual Cluster
   icon: images/oscar.png
   order: 2
   web: https://grycap.github.io/oscar/
-  childs:
-    - oscar_elastic.yaml
-    - oscar_function.yaml
-    - prometheus.yaml
 
 description: Template for launching an OSCAR Virtual Cluster.
 
@@ -113,7 +110,15 @@ topology_template:
       default: false
       constraints:
       - valid_values: [ false, true ]
-  
+
+    users:
+      type: list
+      description: list of users to create on the VM
+      entry_schema:
+        type: tosca.datatypes.indigo.User
+      default: []
+      required: false
+
   node_templates:
 
     oscar:
@@ -122,8 +127,8 @@ topology_template:
         minio_secretkey: { get_input: minio_password }
         password: { get_input: oscar_password }
         dns_host: { concat: [ get_input: cluster_name, '.', get_input: domain_name ] }
-        minio_dns_host: { concat: [ "minio.", get_input: cluster_name, '.', get_input: domain_name ] }
-        minio_dns_host_console: { concat: [ "console.minio.", get_input: cluster_name, '.', get_input: domain_name ] }
+        minio_dns_host: { concat: [ "minio-", get_input: cluster_name, '.', get_input: domain_name ] }
+        minio_dns_host_console: { concat: [ "console-minio-", get_input: cluster_name, '.', get_input: domain_name ] }
         oidc_enable: true
         oidc_subject: { get_input: user_id }
         oidc_groups: [{ get_input: selected_vo }]
@@ -174,14 +179,16 @@ topology_template:
 
     front:
       type: tosca.nodes.indigo.Compute
+      properties:
+        os_users: { get_input: users }
       capabilities:
         endpoint:
           properties:
             dns_name: kubeserver
             additional_dns_names:
             - { concat: [ get_input: cluster_name, '@', get_input: domain_name ] }
-            - { concat: [ "minio.", get_input: cluster_name, '@', get_input: domain_name ] }
-            - { concat: [ "console.minio.", get_input: cluster_name, '@', get_input: domain_name ] }
+            - { concat: [ "minio-", get_input: cluster_name, '@', get_input: domain_name ] }
+            - { concat: [ "console-minio-", get_input: cluster_name, '@', get_input: domain_name ] }
             network_name: PUBLIC
         host:
           properties:
@@ -219,6 +226,8 @@ topology_template:
 
     wn:
       type: tosca.nodes.indigo.Compute
+      properties:
+        os_users: { get_input: users }
       capabilities:
         scalable:
           properties:
@@ -234,13 +243,17 @@ topology_template:
             type: linux
 
   outputs:
-    oscarui_endpoint:
-      value: { concat: [ 'https://ui.oscar.grycap.net?endpoint=https://', get_input: cluster_name, '.', get_input: domain_name, '&username=admin&password', get_input: oscar_password  ] }
+#    oscarui_endpoint:
+#      value: { concat: [ 'https://ui.oscar.grycap.net?endpoint=https://', get_input: cluster_name, '.', get_input: domain_name, '&username=admin&password', get_input: oscar_password  ] }
     dashboard_endpoint:
       value: { concat: [ 'https://', get_input: cluster_name, '.', get_input: domain_name , '/dashboard/' ] }
     local_oscarui_endpoint:
       value: { concat: [ 'https://', get_input: cluster_name, '.', get_input: domain_name , '/' ] }
     minio_endpoint:
-      value: { concat: [ 'https://minio.', get_input: cluster_name, '.', get_input: domain_name, '/' ] }
+      value: { concat: [ 'https://minio-', get_input: cluster_name, '.', get_input: domain_name, '/' ] }
     console_minio_endpoint:
-      value: { concat: [ 'https://console.minio.', get_input: cluster_name, '.', get_input: domain_name, '/' ] }
+      value: { concat: [ 'https://console-minio-', get_input: cluster_name, '.', get_input: domain_name, '/' ] }
+    os_users:
+      value: { get_property: [ front, os_users, 0 ] }
+    node_ip:
+      value: { get_attribute: [ front, public_address, 0 ] }
